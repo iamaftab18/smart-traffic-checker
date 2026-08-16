@@ -10,6 +10,8 @@ import soundfile as sf
 
 logger = logging.getLogger(__name__)
 
+SPEAK_TIMEOUT_SEC = 15
+
 
 def list_output_devices():
     """Returns [{'index': int, 'name': str}] for every playback-capable device
@@ -42,20 +44,43 @@ class TTSWorker:
         self._queue.put(text)
 
     def _run(self):
-        engine = pyttsx3.init()
         while True:
             text = self._queue.get()
+            self._speak_with_timeout(text)
+
+    def _speak_with_timeout(self, text):
+        # A stuck pyttsx3/SAPI5 call would otherwise block this loop forever,
+        # silently killing every announcement after it. Running it on a
+        # throwaway thread means a hang just gets abandoned instead of wedging
+        # the whole announcer.
+        done = threading.Event()
+
+        def worker():
             try:
-                self._speak_now(engine, text)
+                self._speak_now(text)
             except Exception:
                 logger.exception("TTS playback failed")
+            finally:
+                done.set()
 
-    def _speak_now(self, engine, text):
+        threading.Thread(target=worker, daemon=True).start()
+        if not done.wait(SPEAK_TIMEOUT_SEC):
+            logger.error(
+                "TTS call for %r did not finish within %ss - abandoning it so later announcements aren't blocked",
+                text, SPEAK_TIMEOUT_SEC,
+            )
+
+    def _speak_now(self, text):
+        # pyttsx3's SAPI5 driver only reliably renders once per engine instance -
+        # reusing one across calls makes every announcement after the first go
+        # silent with no error. A fresh engine per utterance avoids that.
+        engine = pyttsx3.init()
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
             wav_path = tmp.name
         try:
             engine.save_to_file(text, wav_path)
             engine.runAndWait()
+            engine.stop()
             data, samplerate = sf.read(wav_path, dtype="float32")
             sd.play(data, samplerate, device=self._device_index)
             sd.wait()
