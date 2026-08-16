@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+env/
+
+# Redundant archives - the same content already lives unpacked in this repo
+# (Signal Detection.v1i.yolov8/, data/)
+data.zip
+Signal Detection.v1i.yolov8.zip
+
+# Raw pre-annotation photo dump - superseded by the organized, labeled
+# dataset in "Signal Detection.v1i.yolov8/"
+data/
+
+# Stray folder that isn't part of this project (training zip bundle,
+# unrelated document) - keep webapp/models/ (the one the app actually uses)
+/models/
+
+# OS cruft
+.DS_Store
+Thumbs.db
