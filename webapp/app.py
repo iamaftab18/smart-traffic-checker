@@ -9,22 +9,23 @@ from flask import Flask, Response, jsonify, render_template, request
 
 import config
 from camera_stream import ESP32CamStream, build_stream_url
-from detector import SignalDetector, draw_boxes
+from detector import SignalDetector, draw_label
 from tts_engine import TTSWorker, list_output_devices
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-if not os.path.exists(config.MODEL_PATH):
+if not os.path.exists(config.MODEL_PATH) or not os.path.exists(config.CLASSES_PATH):
     raise SystemExit(
-        f"Model not found at {config.MODEL_PATH}\n"
-        "Download 'best.pt' from the training notebook and place it in webapp/models/."
+        f"Classifier files not found at {config.MODEL_PATH} / {config.CLASSES_PATH}\n"
+        "Download 'signal_classifier.pt' and 'classes.json' from "
+        "Signal_Classifier_Training.ipynb and place them in webapp/models/."
     )
 
 app = Flask(__name__)
 
 cam_stream = ESP32CamStream(config.ESP32_STREAM_URL)
-detector = SignalDetector(config.MODEL_PATH, config.CONF_THRESHOLD, config.STABLE_FRAMES)
+detector = SignalDetector(config.MODEL_PATH, config.CLASSES_PATH, config.CONF_THRESHOLD, config.STABLE_FRAMES)
 tts = TTSWorker()
 
 state_lock = threading.Lock()
@@ -142,7 +143,7 @@ def mjpeg_generator():
         if frame is None:
             time.sleep(0.05)
             continue
-        annotated = draw_boxes(frame, detector.last_boxes)
+        annotated = draw_label(frame, detector.last_prediction)
         ok, buf = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, config.JPEG_QUALITY])
         if not ok:
             continue

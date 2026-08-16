@@ -2,7 +2,9 @@ flask
 opencv-python
 numpy
 requests
-ultralytics
+torch
+torchvision
+Pillow
 pyttsx3
 sounddevice
 soundfile
